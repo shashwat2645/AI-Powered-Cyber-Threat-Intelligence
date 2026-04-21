@@ -5,8 +5,11 @@ from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
 import joblib
 import json
-from feature_extractor import URLFeatureExtractor
 import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from models.feature_extractor import URLFeatureExtractor
 
 MODEL_PATH = os.path.join(os.path.dirname(__file__), 'model.pkl')
 
