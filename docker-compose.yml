@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: threat-intel-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-threat_intel}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./database/seed_data.sql:/docker-entrypoint-initdb.d/02-seed.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - threat-intel-net
+
+  ml-api:
+    build:
+      context: ./ml
+      dockerfile: Dockerfile
+    container_name: threat-intel-ml-api
+    environment:
+      - FLASK_ENV=production
+      - ML_PORT=${ML_PORT:-5001}
+    ports:
+      - "5001:5001"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - threat-intel-net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: threat-intel-backend
+    environment:
+      - PORT=${PORT:-5000}
+      - DB_HOST=mysql
+      - DB_USER=root
+      - DB_PASSWORD=${MYSQL_ROOT_PASSWORD:-rootpassword}
+      - DB_NAME=${MYSQL_DATABASE:-threat_intel}
+      - JWT_SECRET=${JWT_SECRET:-your_super_secret_jwt_key_change_in_production}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-24h}
+      - ML_API_URL=http://ml-api:5001
+    ports:
+      - "3001:5000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      ml-api:
+        condition: service_started
+    networks:
+      - threat-intel-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: threat-intel-frontend
+    environment:
+      - REACT_APP_API_URL=http://localhost:5000/api
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - threat-intel-net
+
+volumes:
+  mysql_data:
+
+networks:
+  threat-intel-net:
+    driver: bridge
